@@ -1,0 +1,123 @@
+# UI 线程入口函数规则配置
+# 每条规则定义：method_names（方法名集合）+ parent_classes 或 interfaces（类条件）
+
+rules:
+  - category: ACTIVITY_LIFECYCLE
+    method_names:
+      - onCreate
+      - onStart
+      - onResume
+      - onPause
+      - onStop
+      - onDestroy
+      - onRestart
+      - onActivityResult
+      - onNewIntent
+      - onSaveInstanceState
+      - onRestoreInstanceState
+    parent_classes:
+      - Activity
+      - FragmentActivity
+      - AppCompatActivity
+      - ListActivity
+      - ActionBarActivity
+
+  - category: FRAGMENT_LIFECYCLE
+    method_names:
+      - onAttach
+      - onCreateView
+      - onViewCreated
+      - onActivityCreated
+      - onDestroyView
+      - onDetach
+    parent_classes:
+      - Fragment
+      - DialogFragment
+      - ListFragment
+      - PreferenceFragment
+
+  - category: SERVICE_LIFECYCLE
+    method_names:
+      - onCreate
+      - onStartCommand
+      - onBind
+      - onUnbind
+      - onDestroy
+    parent_classes:
+      - Service
+      - IntentService
+      - JobIntentService
+
+  - category: RECEIVER_CALLBACK
+    method_names:
+      - onReceive
+    parent_classes:
+      - BroadcastReceiver
+
+  - category: PROVIDER_CALLBACK
+    method_names:
+      - onCreate
+      - query
+      - insert
+      - update
+      - delete
+    parent_classes:
+      - ContentProvider
+
+  - category: APPLICATION_LIFECYCLE
+    method_names:
+      - onCreate
+      - onTerminate
+      - onConfigurationChanged
+      - onLowMemory
+      - onTrimMemory
+    parent_classes:
+      - Application
+
+  - category: CLICK_HANDLER
+    method_names:
+      - onClick
+    interfaces:
+      - OnClickListener
+      - View.OnClickListener
+
+  - category: TOUCH_HANDLER
+    method_names:
+      - onTouch
+    interfaces:
+      - OnTouchListener
+      - View.OnTouchListener
+
+  - category: HANDLER_MESSAGE
+    method_names:
+      - handleMessage
+    parent_classes:
+      - Handler
+
+  - category: ASYNC_TASK_UI_CALLBACK
+    method_names:
+      - onPreExecute
+      - onPostExecute
+      - onProgressUpdate
+    parent_classes:
+      - AsyncTask
+
+  - category: ADAPTER_CALLBACK
+    method_names:
+      - onCreateViewHolder
+      - onBindViewHolder
+      - getView
+      - getItemCount
+    parent_classes:
+      - RecyclerView.Adapter
+      - BaseAdapter
+      - ArrayAdapter
+
+  - category: PERMISSION_CALLBACK
+    method_names:
+      - onRequestPermissionsResult
+
+  - category: NAVIGATION_CALLBACK
+    method_names:
+      - onBackPressed
+      - onNavigationItemSelected

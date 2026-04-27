@@ -1,0 +1,32 @@
+# Android 框架类层次桩
+# 格式：parent: [child1, child2, ...]
+# 用于在项目源码之外补全 Android SDK 的继承关系
+
+hierarchy:
+  Activity:
+    - FragmentActivity
+    - ListActivity
+  FragmentActivity:
+    - AppCompatActivity
+    - ActionBarActivity
+  Fragment:
+    - DialogFragment
+    - ListFragment
+    - PreferenceFragment
+  Service:
+    - IntentService
+    - JobIntentService
+  RecyclerView.Adapter:
+    - ListAdapter
+  View:
+    - ViewGroup
+    - TextView
+    - ImageView
+    - Button
+    - EditText
+  ViewGroup:
+    - LinearLayout
+    - RelativeLayout
+    - FrameLayout
+    - ConstraintLayout
+    - RecyclerView
