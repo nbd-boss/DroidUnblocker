@@ -22,7 +22,7 @@
 
 | 类型 | 值 | 用途 |
 |------|----|------|
-| `DecisionLevel` | `CONCLUDE` `EXPLORE` `EXPAND` `MOCK` | 探索阶段四级节点决策 |
+| `DecisionLevel` | `CONCLUDE` `TOOL_CALL` `MOCK` | 探索阶段三级节点决策 |
 | `Confidence` | `LOW` `MEDIUM` `HIGH` | 静态分析置信度 |
 | `VerificationStatus` | `PENDING` `CONFIRMED` `PARTIAL` `REFUTED` | Phase 2 动态验证结果 |
 

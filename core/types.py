@@ -5,8 +5,7 @@ from typing import Any, List, Optional
 
 class DecisionLevel(Enum):
     CONCLUDE = "CONCLUDE"
-    EXPLORE = "EXPLORE"
-    EXPAND = "EXPAND"
+    TOOL_CALL = "TOOL_CALL"
     MOCK = "MOCK"
 
 
