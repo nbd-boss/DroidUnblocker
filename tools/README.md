@@ -57,7 +57,7 @@ registry.register(SootAnalyzerTool())
 registry.register(CallChainExpanderTool())
 
 # LLM 调用工具
-result: ToolResult = registry.execute("CallChainExpander", {"method": "...", "mode": "SHALLOW"})
+result: ToolResult = registry.execute("CallChainExpander", {"method": "..."})
 
 # 生成 LLM 系统提示词片段
 tools_prompt: str = registry.get_tools_prompt()
@@ -69,9 +69,9 @@ tools_prompt: str = registry.get_tools_prompt()
 ### CallChainExpander
 Description: 从指定方法出发，展开调用链信息...
 Parameters: {"type": "object", "properties": {...}}
-Returns: SHALLOW: {...} | FULL_EXPAND: {...}
+Returns: {"method": "...", "found": true, "tags": [...], "body": "...", "callees": [...]}
 Usage hints:
-  默认使用 SHALLOW 模式获取风险标签，再决定是否升级。
+  对可疑的 expandable:true callee 再次发起 EXPAND，逐层按需深入。
   ...
 ```
 
@@ -97,9 +97,7 @@ Usage hints:
 
 **调用时机：** ReAct 循环中，对每个待决策节点调用。
 
-两种模式：
-- **SHALLOW**：单层 callee 摘要 + 规则标签（I/O / DATABASE / NETWORK / THREADING / SYNCHRONIZATION / HANDLER），零 LLM 开销
-- **FULL_EXPAND**：完整两层 BFS 子树，含方法体片段
+单次调用返回目标方法的完整 body 摘要（≤600字符）及所有直接 callee 的签名和风险标签（I/O / DATABASE / NETWORK / THREADING / SYNCHRONIZATION / HANDLER）。对可疑的 expandable:true callee 再次发起调用，逐层按需深入。
 
 详见 [`README_call_chain_expander.md`](README_call_chain_expander.md)
 
