@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 class DecisionLevel(Enum):
     CONCLUDE = "CONCLUDE"
     EXPLORE = "EXPLORE"
-    SHALLOW = "SHALLOW"
+    EXPAND = "EXPAND"
     MOCK = "MOCK"
 
 
@@ -26,35 +26,6 @@ class VerificationStatus(Enum):
 class Verdict(Enum):
     BLOCKED = "BLOCKED"  # 找到阻塞根因，进入 Phase 2
     CLEAN = "CLEAN"      # 确认无阻塞，跳过 Phase 2
-
-
-@dataclass
-class CalleeInfo:
-    method: str
-    tags: List[str] = field(default_factory=list)
-
-
-@dataclass
-class ShallowSummary:
-    method: str
-    callees: List[CalleeInfo] = field(default_factory=list)
-    has_io: bool = False
-    has_threading: bool = False
-    has_network: bool = False
-    has_database: bool = False
-    has_synchronization: bool = False
-    estimated_complexity: str = "low"
-
-
-@dataclass
-class FullExpandNode:
-    signature: str
-    class_name: str
-    method_name: str
-    tags: List[str] = field(default_factory=list)
-    body_excerpt: str = ""
-    callees: List["FullExpandNode"] = field(default_factory=list)
-    expandable: bool = False
 
 
 @dataclass

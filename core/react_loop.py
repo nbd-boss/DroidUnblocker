@@ -28,32 +28,27 @@ class ReActLoop:
         registry,
         llm_client,
         tools_description: str = "",
-        max_depth: int = 8,
         max_iterations: int = 40,
     ) -> None:
         self.registry = registry
         self.llm_client = llm_client
-        self.max_depth = max_depth
         self.max_iterations = max_iterations
         self._explore_system = _EXPLORE_SYSTEM_TEMPLATE.replace(
             "{tools_description}", tools_description
         )
 
     def run(self, entry_method: str) -> Tuple[List[AnalysisConclusion], AgentMemory]:
-        # AI 的短期记忆 = 走过的调用链 + 思考内容 + 工具调用结果 + 当前深度
+        # AI 的短期记忆 = 走过的调用链 + 思考内容 + 工具调用结果
         memory = AgentMemory()
         memory.entry_method = entry_method
-        memory.push_call(entry_method)
+        root_id = memory.register_node(entry_method, [], None)
+        memory.current_focus = root_id
         memory.add("system", f"Starting exploration. Entry: {entry_method}")
 
         conclusions: List[AnalysisConclusion] = []
 
         # 最多思考 max_iterations 轮
         for iteration in range(self.max_iterations):
-            if memory.current_depth >= self.max_depth:
-                logger.info(f"Max depth {self.max_depth} reached, stopping exploration.")
-                break
-
             # ── Thought ───────────────────────────────
             context = memory.get_context(conclusions=conclusions)
             try:
@@ -119,6 +114,7 @@ class ReActLoop:
                     )
                     logger.info(f"Conclusion reached: CLEAN (no blocking)")
                     conclusions.append(conclusion)
+                    memory.set_verdict(memory.current_focus, "CLEAN")
                     return conclusions, memory
 
                 # BLOCKED: P5 — 必须至少成功分析过 1 个项目内方法才允许结案
@@ -147,6 +143,7 @@ class ReActLoop:
                     f"Conclusion reached: [{conclusion.blocking_pattern}] {conclusion.root_cause}"
                 )
                 conclusions.append(conclusion)
+                memory.set_verdict(memory.current_focus, "BLOCKED", conclusion.blocking_pattern)
                 memory.add_observation(
                     f"Blocking point recorded: [{conclusion.blocking_pattern}] {conclusion.root_cause}. "
                     "Continue exploring other potential blocking paths in this entry method. "
@@ -175,33 +172,26 @@ class ReActLoop:
                     )
                     continue
 
-                # P4: CallChainExpander 去重
-                # SHALLOW: key=method::SHALLOW，防止重复查询
-                # FULL_EXPAND: 检查 memory.explored（body 是否已被看过），允许 SHALLOW→FULL_EXPAND 升级
+                # P4: CallChainExpander 去重 — body 已展开过的方法不再重复展开
                 if tool_name == "CallChainExpander":
                     target_method = tool_params.get("method", "")
-                    target_mode = tool_params.get("mode", "SHALLOW")
+                    if target_method and memory.is_body_explored(target_method):
+                        memory.add_action(f"TOOL_CALL {tool_name}({tool_params}) [SKIPPED - already explored]")
+                        memory.add_observation(
+                            f"'{target_method}' body was already expanded in this session. "
+                            "Expand one of its expandable:true callees instead."
+                        )
+                        continue
+                    # 将 current_focus 更新到目标方法节点（若未注册则先注册）
                     if target_method:
-                        if target_mode == "SHALLOW" and memory.is_explored(f"{target_method}::SHALLOW"):
-                            memory.add_action(f"TOOL_CALL {tool_name}({tool_params}) [SKIPPED - already explored]")
-                            memory.add_observation(
-                                f"'{target_method}' (SHALLOW) was already queried in this session. "
-                                "MOCK this method or move to a different entry point."
-                            )
-                            continue
-                        if target_mode == "FULL_EXPAND" and memory.is_body_explored(target_method):
-                            memory.add_action(f"TOOL_CALL {tool_name}({tool_params}) [SKIPPED - body already explored]")
-                            memory.add_observation(
-                                f"'{target_method}' body was already expanded in this session. "
-                                "MOCK this method or move to a different entry point."
-                            )
-                            continue
-
-                # FULL_EXPAND 注入记忆化上下文
-                if tool_name == "CallChainExpander" and tool_params.get("mode") == "FULL_EXPAND":
-                    tool_params = dict(tool_params)
-                    tool_params["explored"] = memory.explored
-                    tool_params["method_cache"] = memory.method_cache
+                        ids = memory.sig_to_ids.get(target_method, [])
+                        target_id = next(
+                            (i for i in ids if not memory.tree_nodes[i].expanded and memory.tree_nodes[i].reuse_from is None),
+                            None,
+                        )
+                        if target_id is None:
+                            target_id = memory.register_node(target_method, [], memory.current_focus)
+                        memory.current_focus = target_id
 
                 memory.add_action(f"TOOL_CALL {tool_name}({tool_params})")
                 result: ToolResult = self.registry.execute(tool_name, tool_params)
@@ -214,20 +204,20 @@ class ReActLoop:
 
                     if tool_name == "CallChainExpander":
                         target_method = tool_params.get("method", "")
-                        target_mode = tool_params.get("mode", "SHALLOW")
-                        if target_method:
-                            # P4 标记（SHALLOW 用 method::mode key）
-                            if target_mode == "SHALLOW":
-                                memory.mark_explored(f"{target_method}::SHALLOW")
-                            # P5: 方法在 index 中存在才算有效探索
-                            if result.data.get("found", True):
-                                memory.valid_explored_count += 1
-
-                    # FULL_EXPAND 时更新调用深度和调用栈
-                    if (tool_name == "CallChainExpander"
-                            and tool_params.get("mode") == "FULL_EXPAND"):
-                        memory.current_depth += 1
-                        memory.push_call(tool_params.get("method", ""))
+                        if target_method and result.data.get("found", False):
+                            memory.expand_node(
+                                memory.current_focus,
+                                result.data.get("body", ""),
+                                result.data.get("tags", []),
+                            )
+                            memory.valid_explored_count += 1
+                            for callee in result.data.get("callees", []):
+                                if callee.get("expandable"):
+                                    memory.register_node(
+                                        callee["signature"],
+                                        callee.get("tags", []),
+                                        memory.current_focus,
+                                    )
                 else:
                     memory.add_observation(f"{tool_name} error: {result.error}")
 

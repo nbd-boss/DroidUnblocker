@@ -9,7 +9,7 @@
 | 文件 | 职责 |
 |------|------|
 | [`types.py`](#typespy) | 枚举与数据类定义 |
-| [`memory.py`](#memorypy) | Agent 工作记忆管理 |
+| [`memory.py`](#memorypy) | Agent 工作记忆管理（树状结构） |
 | [`react_loop.py`](#react_looppy) | Thought → Action → Observation 循环引擎 |
 
 ---
@@ -22,7 +22,7 @@
 
 | 类型 | 值 | 用途 |
 |------|----|------|
-| `DecisionLevel` | `CONCLUDE` `EXPLORE` `SHALLOW` `MOCK` | 探索阶段四级节点决策 |
+| `DecisionLevel` | `CONCLUDE` `EXPLORE` `EXPAND` `MOCK` | 探索阶段四级节点决策 |
 | `Confidence` | `LOW` `MEDIUM` `HIGH` | 静态分析置信度 |
 | `VerificationStatus` | `PENDING` `CONFIRMED` `PARTIAL` `REFUTED` | Phase 2 动态验证结果 |
 
@@ -41,19 +41,6 @@ class AnalysisConclusion:
     slice_evidence: str = ""
 ```
 
-**`FullExpandNode`** — FULL_EXPAND 返回的调用树节点：
-```python
-@dataclass
-class FullExpandNode:
-    signature: str
-    class_name: str
-    method_name: str
-    tags: List[str]
-    body_excerpt: str          # 第二层节点为空（expandable=True）
-    callees: List[FullExpandNode]
-    expandable: bool = False   # True 表示该节点未展开，Agent 可继续深入
-```
-
 **`ToolResult`** — 所有 Tool 的统一返回格式：
 ```python
 @dataclass
@@ -69,19 +56,55 @@ class ToolResult:
 
 `AgentMemory` 管理单个 UI 入口的完整分析上下文，生命周期与一次 `react_loop.run()` 调用一致。
 
-### 存储内容
+### 数据结构
+
+#### TreeNode
+
+每个调用树节点的信息载体：
+
+```python
+@dataclass
+class TreeNode:
+    node_id: int
+    signature: str
+    tags: List[str]
+    body_excerpt: str = ""        # expanded=True 时才有值
+    expanded: bool = False        # 是否已 EXPAND 过（LLM 看过 body）
+    verdict: str = ""             # "" | "BLOCKED" | "CLEAN"
+    blocking_pattern: str = ""    # verdict=BLOCKED 时填入
+    reuse_from: Optional[int] = None  # alias 节点指向原始节点 ID
+```
+
+#### AgentMemory 字段
 
 | 属性 | 类型 | 内容 |
 |------|------|------|
 | `entry_method` | `str` | 当前 UI 入口方法签名 |
 | `entries` | `List[MemoryEntry]` | 按时序排列的 thought/action/observation/system 条目 |
 | `mocked_methods` | `set` | 已 MOCK 的方法集合 |
-| `explored_methods` | `set` | P4 去重集合，key=`method::mode` |
-| `explored` | `Set[str]` | FULL_EXPAND 记忆化集合，key=纯方法签名（body 已被 LLM 看过） |
-| `method_cache` | `Dict[str, dict]` | body 缓存，`{body_excerpt, tags}`，上下文压缩后可恢复 |
-| `call_stack` | `List[str]` | 当前调用链 |
-| `current_depth` | `int` | 当前探索深度（FULL_EXPAND 时递增） |
 | `valid_explored_count` | `int` | P5 门槛：在 index 中找到并成功分析的方法数 |
+| `tree_nodes` | `Dict[int, TreeNode]` | 节点 ID → 节点对象 |
+| `parent` | `Dict[int, Optional[int]]` | 节点 ID → 父节点 ID（根节点为 None） |
+| `sig_to_ids` | `Dict[str, List[int]]` | 方法签名 → 节点 ID 列表（支持菱形依赖） |
+| `current_focus` | `int` | 当前焦点节点 ID |
+
+### 树结构说明
+
+节点在 **callee 被发现时**（CallChainExpander 返回时）注册，在 **EXPAND 时**填充 body。父子关系通过 `parent` 字典编码，树拓扑为父指针表示法。
+
+菱形依赖（A→B→D，A→C→D）通过 `sig_to_ids` 支持同一签名对应多个节点：
+- D 首次出现时创建原始节点
+- D 再次出现（已有 expanded=True 的同签名节点）时，新节点标记 `reuse_from` 指向原始节点，复用其结论，不重复 EXPAND
+
+### 关键方法
+
+| 方法 | 调用时机 |
+|------|---------|
+| `register_node(sig, tags, parent_id)` | callee 被发现时，返回新节点 ID |
+| `expand_node(node_id, body, tags)` | EXPAND 成功后，填充 body、标记 expanded=True |
+| `set_verdict(node_id, verdict, blocking_pattern)` | CONCLUDE 时回写结论 |
+| `get_path_to(node_id) -> List[int]` | 沿 parent 回溯，重建从根到指定节点的路径 |
+| `is_body_explored(sig)` | P4 去重检查，签名是否已有 expanded=True 的节点 |
 
 ### 上下文结构
 
@@ -91,16 +114,25 @@ class ToolResult:
 ```
 === Session State ===
 Entry method : MainActivity.onMatrixClick
-Call chain   : MainActivity.onMatrixClick → MatrixProcessor.runComputation
-Depth        : 1
-Mocked       : MainActivity.d, MainActivity.runComputation
-Body explored: MatrixProcessor.runComputation
+Current path : MainActivity.onMatrixClick → MatrixProcessor.runComputation
 Blocking points found so far:
-  [CPU_INTENSIVE] O(n³) matrix multiplication  |  chain: MainActivity.onMatrixClick → ...
-Relevant method bodies:
-  [MatrixProcessor.runComputation]
-    tags: []
-    body: public static void runComputation() { ... }
+  [CPU_INTENSIVE] O(n³) matrix multiplication  |  chain: ...
+
+► [CURRENT PATH]
+  MatrixProcessor.runComputation  [FOCUS]  tags=['CPU']
+    body: public static void runComputation() { ...
+  MainActivity.onMatrixClick  [PATH]  tags=[]
+    body: protected void onMatrixClick() { ...
+
+✓ [EXPLORED - off path]
+  Utils.formatTime  tags=[]  → CLEAN()
+
+↺ [REUSED]
+  DatabaseHelper.query  tags=['DATABASE']  reused from node#3  → BLOCKED(DATABASE)
+
+○ [EXPANDABLE - not yet explored]
+  NetworkClient.fetch  tags=['NETWORK']
+
 === Recent History ===
 ```
 
@@ -112,7 +144,7 @@ Relevant method bodies:
 [Observation] CallChainExpander result: ...
 ```
 
-结构化摘要保证关键状态不因滑动窗口截断而丢失；Relevant method bodies 只输出 `call_stack` 上涉及的方法 body，避免 token 膨胀。
+主路径节点给完整 body；旁路已探索节点只给签名 + tags + verdict；alias 节点标注复用来源；未展开节点只给签名 + tags。
 
 ---
 
@@ -127,7 +159,6 @@ ReActLoop(
     registry,               # ToolRegistry 实例
     llm_client,             # LLMClient 实例
     tools_description="",   # 工具描述文本，注入 system prompt
-    max_depth=8,
     max_iterations=40,
 )
 ```
@@ -140,19 +171,23 @@ conclusions, memory = react_loop.run(entry_method="MainActivity.onCreate")
 
 内部循环：
 ```
-while iteration < max_iterations and depth < max_depth:
+初始化：register_node(entry_method) → current_focus = root_id
+
+while iteration < max_iterations:
     context = memory.get_context(conclusions=conclusions)
     response = llm_client.complete(system, user)   → JSON
     parsed = _parse_response(response)
 
-    if action.type == "CONCLUDE":   → 记录结论或终止
-    elif action.type == "MOCK":     → 标记方法为 MOCK
+    if action.type == "CONCLUDE":
+        set_verdict(current_focus, verdict)   → 记录结论或终止
+    elif action.type == "MOCK":
+        mark_mocked(method)
     elif action.type == "TOOL_CALL":
         P2: 拦截 SootStaticAnalyzer 重复调用
-        P4: 拦截重复 SHALLOW / 已 body-explored 的 FULL_EXPAND
-        注入 explored + method_cache 到 FULL_EXPAND params
+        P4: 拦截已 body-explored 的 EXPAND 请求（is_body_explored）
+        更新 current_focus 到目标方法节点
         result = registry.execute(tool_name, params)
-        P5: 记录有效探索计数
+        若 found=True：expand_node + register callees + valid_explored_count++
 ```
 
 ### 护栏机制
@@ -160,8 +195,7 @@ while iteration < max_iterations and depth < max_depth:
 | 护栏 | 位置 | 作用 |
 |------|------|------|
 | P2 | TOOL_CALL 前 | 硬拦截循环内的 SootStaticAnalyzer 调用 |
-| P4-SHALLOW | TOOL_CALL 前 | 拦截重复 SHALLOW 查询（`method::SHALLOW` key） |
-| P4-FULL | TOOL_CALL 前 | 拦截已展开过 body 的 FULL_EXPAND 请求（检查 `memory.explored`） |
+| P4 | TOOL_CALL 前 | 拦截已展开过 body 的 EXPAND 请求（查 `is_body_explored`） |
 | P5 | CONCLUDE 前 | 要求至少成功分析过 1 个项目内方法才允许 BLOCKED 结案 |
 
 ### LLM 响应格式（JSON）
@@ -174,7 +208,7 @@ while iteration < max_iterations and depth < max_depth:
 
     // TOOL_CALL
     "tool_name": "CallChainExpander",
-    "params": { "method": "...", "mode": "SHALLOW" },
+    "params": { "method": "..." },
 
     // CONCLUDE BLOCKED
     "verdict": "BLOCKED",
