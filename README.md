@@ -152,13 +152,12 @@ python main.py path/to/src --api-key sk-...
 
 ## ReAct 循环决策体系
 
-每个调用节点做出四选一决策：
+每个调用节点做出三选一决策：
 
 | 决策 | 含义 | 触发条件 |
 |------|------|---------|
-| `CONCLUDE BLOCKED` | 找到阻塞根因，进入 Phase 2 | 直接调用已知阻塞 API 或 CPU 密集操作 |
-| `CONCLUDE CLEAN` | 确认无阻塞 | 所有调用链均安全 |
-| `TOOL_CALL` | 继续展开（SHALLOW / FULL_EXPAND） | 方法内部未知，需进一步分析 |
+| `CONCLUDE` | 输出结论（verdict: `BLOCKED` / `CLEAN` / `ALL_CLEAR`） | 已有足够证据判断是否阻塞 |
+| `TOOL_CALL` | 继续展开，逐层按需深入 | 方法内部未知，需进一步分析 |
 | `MOCK` | 跳过 | 方法不在 index 或明确无关 |
 
 ---
@@ -167,11 +166,11 @@ python main.py path/to/src --api-key sk-...
 
 `AgentMemory` 生命周期与单个 UI 入口分析一致，上下文分两层：
 
-**结构化摘要（置顶）**：入口方法、调用链深度、已 MOCK 方法、已展开 body 的方法、已发现阻塞点、当前调用链上方法的 body 缓存。
+**结构化摘要（置顶）**：入口方法、当前焦点路径（从根到当前节点）、已 MOCK 方法、已发现阻塞点；路径上各节点附完整 body，旁路已探索节点只显示签名和结论，alias 节点标注复用来源，未展开节点列为待探索。
 
 **滑动窗口（最近 15 条）**：完整的 thought/action/observation 历史。
 
-关键状态不因窗口截断丢失；`method_cache` 在上下文压缩后仍可恢复方法实现。
+树状上下文确保 LLM 始终能看到当前路径的完整信息，同时不被无关分支的 body 干扰。
 
 ---
 
@@ -180,7 +179,7 @@ python main.py path/to/src --api-key sk-...
 | 护栏 | 作用 |
 |------|------|
 | P2 | 硬拦截 ReAct 循环内的 SootStaticAnalyzer 重复调用 |
-| P4 | 拦截重复 SHALLOW 查询 / 已展开 body 的 FULL_EXPAND 请求 |
+| P4 | 拦截对已展开过 body 的方法重复发起 CallChainExpander |
 | P5 | BLOCKED 结案前要求至少成功分析过 1 个项目内方法 |
 
 ---
