@@ -89,7 +89,7 @@ Usage hints:
 
 遍历 Android 项目源码目录（`.java`/`.kt`），构建 `SourceCodeIndex`：方法签名索引、类继承关系、调用图。识别 UI 线程入口方法并缓存到模块级单例 `_INDEX`，供后续工具共享。
 
-详见 [`README_soot_analyzer.md`](README_soot_analyzer.md)
+详见 [`soot_analyzer/skill.md`](soot_analyzer/skill.md)
 
 ---
 
@@ -99,7 +99,7 @@ Usage hints:
 
 单次调用返回目标方法的完整 body 摘要（≤600字符）及所有直接 callee 的签名和风险标签（I/O / DATABASE / NETWORK / THREADING / SYNCHRONIZATION / HANDLER）。对可疑的 expandable:true callee 再次发起调用，逐层按需深入。
 
-详见 [`README_call_chain_expander.md`](README_call_chain_expander.md)
+详见 [`call_chain_expander/README.md`](call_chain_expander/README.md)
 
 ---
 
@@ -109,7 +109,7 @@ Usage hints:
 
 基于文本近似 PDG 后向切片（def-use 链 + 控制依赖），将上下文从数百行压缩到 5-15 条语句。
 
-详见 [`README_program_slicer.md`](README_program_slicer.md)
+详见 [`program_slicer/README.md`](program_slicer/README.md)
 
 ---
 
@@ -119,7 +119,7 @@ Usage hints:
 
 调用 LLM 生成 Kotlin Instrumented Test 测试体，嵌入 StrictMode 检测 + `DroidUnblocker: elapsed=Xms` timing tag 的固定模板。
 
-详见 [`README_test_generator.md`](README_test_generator.md)
+详见 [`test_generator/README.md`](test_generator/README.md)
 
 ---
 
@@ -129,27 +129,27 @@ Usage hints:
 
 将测试代码写入 Android 测试项目，通过 `adb` + `gradlew` 在真机/模拟器上运行，解析 logcat 获取 StrictMode 违规和阻塞时间，为 Reflection 提供 ground truth。
 
-详见 [`README_sandbox.md`](README_sandbox.md)
+详见 [`sandbox/README.md`](sandbox/README.md)
 
 ---
 
 ## 工具协作拓扑
 
 ```
-SootStaticAnalyzer ─────────── 构建 SourceCodeIndex（_INDEX）
-        │                              ↑
-        │ 返回 entry_methods     ┌─────┴─────┐
-        ▼                       │           │
-  [ReAct 循环]           CallChainExpander  ProgramSlicer
-  LLM 四级决策                  │
-        │                       └── 共享 _INDEX.get_method()
-        │ CONCLUDE
-        ▼
-  TestCaseGenerator ──── LLM 生成测试体
-        │
-        ▼
-  SandboxExecutor ──── adb + gradle ──── logcat 解析
-        │
-        ▼
-  LLM Reflection ──── VerificationStatus
+SootStaticAnalyzer
+  │  写入 _INDEX（SourceCodeIndex）
+  │  返回 entry_methods
+  ▼
+[ReAct 循环] ─────────── CallChainExpander ──┐
+LLM 四级决策 ─────────── ProgramSlicer       ├── 读取 _INDEX
+  │                                          ┘
+  │ CONCLUDE
+  ▼
+TestCaseGenerator ──── LLM 生成 Kotlin 测试体
+  │
+  ▼
+SandboxExecutor ──── adb + gradlew ──── logcat 解析
+  │
+  ▼
+LLM Reflection ──── VerificationStatus
 ```
