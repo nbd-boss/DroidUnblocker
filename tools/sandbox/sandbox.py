@@ -39,41 +39,6 @@ class SandboxExecutorTool(BaseTool):
     def name(self) -> str:
         return "SandboxExecutor"
 
-    @property
-    def skill_metadata(self) -> dict:
-        return {
-            "name": "SandboxExecutor",
-            "description": (
-                "在模拟器/真机上运行 TestCaseGenerator 生成的测试用例，收集动态执行证据。"
-                "流程：写入测试代码 → 清除 logcat → Gradle connectedAndroidTest → 解析 logcat。"
-                "输出作为 Reflection 阶段的地面真相（ground truth）。"
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "test_code": {
-                        "type": "string",
-                        "description": "TestCaseGenerator 输出的 Kotlin Instrumented Test 源代码",
-                    },
-                    "project_dir": {
-                        "type": "string",
-                        "description": "项目源码目录路径（可选，用于上下文）",
-                    },
-                },
-                "required": ["test_code"],
-            },
-            "returns": (
-                '{ "strict_mode_violations":[...], "has_violations":bool, '
-                '"blocking_time_ms":int, "systrace":"...", "summary":"..." }'
-            ),
-            "usage_hints": [
-                "始终在 TestCaseGenerator 之后调用（Phase 2 Reflection 流程）。",
-                "has_violations=true 或 blocking_time_ms > 300 → CONFIRMED。",
-                "blocking_time_ms > 0 但无 violation → PARTIAL。",
-                "无 violation 且 blocking_time_ms ≤ 0 → REFUTED（可能误报）。",
-            ],
-        }
-
     def execute(self, params: dict) -> ToolResult:
         test_code: str = params.get("test_code", "")
         target_method: str = params.get("target_method", "")

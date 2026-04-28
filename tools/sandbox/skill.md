@@ -36,9 +36,9 @@ returns: >
   — 沙箱不可用时（ADB 未连接、超过最大修复次数仍无法编译）优雅降级，返回 summary 说明原因，不抛出异常。
 usage_hints:
   - 始终在 TestCaseGenerator 之后调用（Phase 2 Reflection 流程）。
-  - "has_violations=true 或 blocking_time_ms > 300" → 提示验证结果为 CONFIRMED。
-  - "blocking_time_ms > 0 但无 violation" → 提示验证结果为 PARTIAL（阻塞存在但位置有偏差）。
-  - "无 violation 且 blocking_time_ms ≤ 0" → 提示验证结果为 REFUTED（可能是静态分析误报）。
+  - has_violations=true 或 blocking_time_ms > 300 → 验证结果为 CONFIRMED。
+  - blocking_time_ms > 0 但无 violation → 验证结果为 PARTIAL（阻塞存在但位置有偏差）。
+  - 无 violation 且 blocking_time_ms ≤ 0 → 验证结果为 REFUTED（可能是静态分析误报）。
   - systrace 字段包含原始 logcat，LLM 可与静态分析结论交叉验证阻塞堆栈位置。
   - 运行前确认：adb devices 有设备、E:/UI_Skill/agent/test-project/ 可编译。
 ---

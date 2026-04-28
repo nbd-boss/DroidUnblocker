@@ -60,50 +60,6 @@ class TestCaseGeneratorTool(BaseTool):
     def name(self) -> str:
         return "TestCaseGenerator"
 
-    @property
-    def skill_metadata(self) -> dict:
-        return {
-            "name": "TestCaseGenerator",
-            "description": (
-                "根据探索阶段根因结论，生成 Android Instrumented Test（Kotlin）。"
-                "内部由 DependencyInliner（递归内联项目内依赖）、"
-                "CallerContextCollector（提取调用者前置语句序列）、"
-                "TestBodyAssembler（LLM 翻译为 Kotlin）三个子模块协作完成。"
-                "生成的测试在主线程直接调用目标方法，挂载 StrictMode 检测违规，"
-                "并记录 wall-clock 耗时（DroidUnblocker timing tag）。"
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "call_chain": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": (
-                            "从 UI 线程入口到阻塞方法的完整调用链（方法签名列表）。"
-                            "DependencyInliner 以末端方法为起点向内展开依赖；"
-                            "CallerContextCollector 以末端方法为目标向外收集调用者上下文。"
-                        ),
-                    },
-                    "root_cause": {
-                        "type": "string",
-                        "description": "根因描述文字，引导 LLM 生成有针对性的测试逻辑",
-                    },
-                },
-                "required": ["call_chain", "root_cause"],
-            },
-            "returns": (
-                '{ "test_code": "<完整 Kotlin Instrumented Test 源文件内容>", '
-                '"target_method": "<call_chain 最后一个方法签名>" }'
-            ),
-            "usage_hints": [
-                "仅在探索阶段得出 CONCLUDE 决策后调用。",
-                "专属于 Phase 2（Reflection 验证阶段），是 SandboxExecutor 的前置步骤。",
-                "call_chain 直接取 CONCLUDE action 中的字段，无需手动构造。",
-                "DependencyInliner 最大展开深度默认为 3；超出深度的依赖以 mock 替代。",
-                "每次验证只调用一次，生成的测试代码会被 SandboxExecutor 覆盖写入同一测试文件。",
-            ],
-        }
-
     def execute(self, params: dict) -> ToolResult:
         call_chain: List[str] = params.get("call_chain", [])
         root_cause: str = params.get("root_cause", "")

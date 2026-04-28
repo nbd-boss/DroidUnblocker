@@ -193,49 +193,6 @@ class ProgramSlicerTool(BaseTool):
     def name(self) -> str:
         return "ProgramSlicer"
 
-    @property
-    def skill_metadata(self) -> dict:
-        return {
-            "name": "ProgramSlicer",
-            "description": (
-                "基于切片准则（目标语句关键词 + 关注变量），对方法做后向静态切片，"
-                "提取影响该变量在目标语句处取值的所有相关语句（数据依赖 + 控制依赖）。"
-                "切片结果携带文件绝对行号；若赋值 RHS 为项目内方法，自动追踪 1 层跨方法数据流。"
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "method": {
-                        "type": "string",
-                        "description": "待切片方法的签名，如 HistoryActivity.onCreate",
-                    },
-                    "target_stmt": {
-                        "type": "string",
-                        "description": "目标语句关键词，如 rawQuery、openStream、listFiles",
-                    },
-                    "target_var": {
-                        "type": "string",
-                        "description": "关注变量名（可选），如 query、cursor",
-                    },
-                },
-                "required": ["method", "target_stmt"],
-            },
-            "returns": (
-                '{ "method":"...", "found":bool, "criterion_stmt":"...", "criterion_var":"...", '
-                '"method_line":N, "slice":[{"line":N,"code":"..."},...], '
-                '"interprocedural_context":[{"line":N,"code":"...","interprocedural":true},...], '
-                '"slice_size":N }'
-            ),
-            "usage_hints": [
-                "仅在 CallChainExpander 已定位到可疑方法后调用（EXPLORE 或 CONCLUDE 路径）。",
-                "target_stmt 设置为阻塞 API 关键词（如 rawQuery、openStream）。",
-                "不要对所有方法做切片——只对已确认可疑的节点使用。",
-                "切片结果通常 5-15 行，直接喂给 LLM 做因果分析。",
-                "found=false 时方法不在 index，不要猜测衍生方法名。",
-                "interprocedural_context 提供 1 层跨方法补充，关注 interprocedural=true 的条目。",
-            ],
-        }
-
     def execute(self, params: dict) -> ToolResult:
         method = params.get("method", "")
         target_stmt = params.get("target_stmt", "")
