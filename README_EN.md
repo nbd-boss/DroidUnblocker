@@ -6,6 +6,12 @@
 
 <h1 align="center">DroidUnblocker Agent</h1>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/python-≥3.11-blue.svg" alt="Python">
+  <img src="https://img.shields.io/badge/platform-Android-green.svg" alt="Platform">
+</p>
+
 An LLM-powered system for automatically localizing the root cause of Android UI thread blocking.
 
 Given an Android project source directory, the Agent autonomously runs a full pipeline of static analysis, reasoning, and dynamic verification, producing a root-cause report down to the function call-chain level.

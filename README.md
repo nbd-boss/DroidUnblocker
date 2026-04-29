@@ -6,6 +6,12 @@
 
 <h1 align="center">DroidUnblocker Agent</h1>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/python-≥3.11-blue.svg" alt="Python">
+  <img src="https://img.shields.io/badge/platform-Android-green.svg" alt="Platform">
+</p>
+
 基于 LLM 的 Android UI 线程阻塞根因自动定位系统。
 
 输入一个 Android 项目源码目录，Agent 自主完成静态分析、推理和动态验证的全流程，输出精确到函数调用链级别的卡顿根因报告。
