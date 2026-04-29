@@ -1,5 +1,9 @@
 中文 | [English](README_EN.md)
 
+<p align="center">
+  <img src="DroidUnblocker.png" width="120" alt="DroidUnblocker">
+</p>
+
 # DroidUnblocker Agent
 
 基于 LLM 的 Android UI 线程阻塞根因自动定位系统。
