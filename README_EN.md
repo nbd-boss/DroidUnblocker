@@ -1,10 +1,10 @@
 [中文](README.md) | English
 
 <p align="center">
-  <img src="DroidUnblocker.png" width="120" alt="DroidUnblocker">
+  <img src="DroidUnblocker.png" width="180" alt="DroidUnblocker">
 </p>
 
-# DroidUnblocker Agent
+<h1 align="center">DroidUnblocker Agent</h1>
 
 An LLM-powered system for automatically localizing the root cause of Android UI thread blocking.
 
