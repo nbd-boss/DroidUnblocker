@@ -1,3 +1,5 @@
+中文 | [English](README_EN.md)
+
 # DroidUnblocker Agent
 
 基于 LLM 的 Android UI 线程阻塞根因自动定位系统。
