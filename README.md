@@ -1,4 +1,4 @@
-中文 | [English](README_EN.md)
+English | [中文](README_CN.md)
 
 <p align="center">
   <img src="DroidUnblocker.png" width="180" alt="DroidUnblocker">
@@ -12,31 +12,31 @@
   <img src="https://img.shields.io/badge/platform-Android-green.svg" alt="Platform">
 </p>
 
-基于 LLM 的 Android UI 线程阻塞根因自动定位系统。
+An LLM-powered system for automatically localizing the root cause of Android UI thread blocking.
 
-输入一个 Android 项目源码目录，Agent 自主完成静态分析、推理和动态验证的全流程，输出精确到函数调用链级别的卡顿根因报告。
+Given an Android project source directory, the Agent autonomously runs a full pipeline of static analysis, reasoning, and dynamic verification, producing a root-cause report down to the function call-chain level.
 
 ---
 
-## 核心架构
+## Architecture
 
-> **Tool-Augmented Reasoning with ReAct Loop + Reflection 验证**
+> **Tool-Augmented Reasoning with ReAct Loop + Reflection Verification**
 
 ```
-Android 项目源码目录
+Android project source directory
  │
- ▼ Phase 1: Exploration（ReAct 探索循环）
- │   SootStaticAnalyzer  →  识别 UI 线程入口方法列表
- │   对每个入口运行 ReActLoop：
- │     [Thought]     LLM 推理当前节点
- │     [Action]      选择工具 / 做出决策
- │     [Observation] 更新工作记忆，进入下一轮
+ ▼ Phase 1: Exploration (ReAct Loop)
+ │   SootStaticAnalyzer  →  identifies UI thread entry methods
+ │   For each entry, runs ReActLoop:
+ │     [Thought]     LLM reasons about the current node
+ │     [Action]      selects a tool or makes a decision
+ │     [Observation] updates working memory, enters next iteration
  │
- ▼ Phase 2: Reflection（动态验证）
- │   TestCaseGenerator  →  生成 Kotlin Instrumented Test
- │   SandboxExecutor    →  Gradle 编译 + ADB 运行 + logcat 解析
- │                          （编译失败时自动 LLM 修复，最多 3 次）
- │   LLM Reflection     →  对比静态结论与运行时数据
+ ▼ Phase 2: Reflection (Dynamic Verification)
+ │   TestCaseGenerator  →  generates Kotlin Instrumented Test
+ │   SandboxExecutor    →  Gradle build + ADB run + logcat parsing
+ │                          (auto LLM repair on compile failure, up to 3 attempts)
+ │   LLM Reflection     →  compares static conclusions with runtime data
  │
  ▼
 result/root_cause_report.json
@@ -45,55 +45,55 @@ result/history/<entry_method>.json
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 agent/
-├── main.py                        # 入口：两阶段流程编排 + token 消耗统计
+├── main.py                        # Entry point: two-phase orchestration + token usage stats
 │
-├── core/                          # ReAct 引擎与数据模型
-│   ├── types.py                   # 枚举 + 数据类（AnalysisConclusion、FullExpandNode 等）
-│   ├── memory.py                  # AgentMemory：结构化摘要 + 滑动窗口上下文
-│   ├── react_loop.py              # ReActLoop：Thought→Action→Observation + P2/P4/P5 护栏
+├── core/                          # ReAct engine and data models
+│   ├── types.py                   # Enums + dataclasses (AnalysisConclusion, etc.)
+│   ├── memory.py                  # AgentMemory: structured summary + sliding-window context
+│   ├── react_loop.py              # ReActLoop: Thought→Action→Observation + P2/P4/P5 guardrails
 │   └── prompt/                    # explore_system.md / explore_user.md
 │                                  # reflect_system.md / reflect_user.md
 │
-├── tools/                         # 5 个标准化 Tool Skill
-│   ├── registry.py                # BaseTool + ToolRegistry 统一调度
-│   ├── soot_analyzer/             # Tool 1：源码静态分析器
-│   │   └── src/                   #   parser / analysis / graph / utils 四层模块
-│   ├── call_chain_expander/       # Tool 2：调用链展开器（方案C分层 + 记忆化）
-│   ├── program_slicer/            # Tool 3：程序切片器
-│   ├── test_generator/            # Tool 4：测试用例生成器
+├── tools/                         # 5 standardized Tool Skills
+│   ├── registry.py                # BaseTool + ToolRegistry unified dispatch
+│   ├── soot_analyzer/             # Tool 1: source code static analyzer
+│   │   └── src/                   #   parser / analysis / graph / utils layers
+│   ├── call_chain_expander/       # Tool 2: call chain expander (memoized tree search)
+│   ├── program_slicer/            # Tool 3: program slicer
+│   ├── test_generator/            # Tool 4: test case generator
 │   │   └── prompt/                #   system_prompt.md / user_prompt.md
-│   └── sandbox/                   # Tool 5：Android 沙箱执行器
-│       ├── compile_fixer.py       #   LLM 驱动的编译错误修复
+│   └── sandbox/                   # Tool 5: Android sandbox executor
+│       ├── compile_fixer.py       #   LLM-driven compile error repair
 │       └── prompt/                #   repair_system.md / repair_user.md
 │
-├── llm/                           # LLM 基础设施（纯通信层）
-│   ├── config.py                  # API Key / Base URL / 模型配置
-│   └── client.py                  # LLMClient：complete() + token 计数
+├── llm/                           # LLM infrastructure (pure communication layer)
+│   ├── config.py                  # API Key / Base URL / model config
+│   └── client.py                  # LLMClient: complete() + token counting
 │
 ├── output/
-│   └── report.py                  # 报告生成与历史记录保存
+│   └── report.py                  # Report generation and history saving
 │
-├── test-project/                  # Phase 2 沙箱 Android 工程
+├── test-project/                  # Phase 2 sandbox Android project
 │   └── app/src/androidTest/java/com/droidunblocker/test/
-│       └── UIBlockingTest.kt      #   SandboxExecutor 写入测试代码的目标文件
+│       └── UIBlockingTest.kt      #   target file for SandboxExecutor to write test code
 │
-└── testcase/                      # 编译通过的最终测试代码存档（按 target_method 命名）
+└── testcase/                      # Archive of successfully compiled test code (named by target_method)
 ```
 
 ---
 
-## 环境要求
+## Requirements
 
-| 依赖 | 版本 | 说明 |
-|------|------|------|
+| Dependency | Version | Notes |
+|------------|---------|-------|
 | Python | ≥ 3.11 | |
-| openai | ≥ 1.30.0 | LLM API 客户端（OpenAI 兼容协议） |
-| javalang | ≥ 0.13.0 | Java 源码 AST 解析 |
-| Android SDK + ADB | 任意 | Phase 2 沙箱执行（可选） |
+| openai | ≥ 1.30.0 | LLM API client (OpenAI-compatible protocol) |
+| javalang | ≥ 0.13.0 | Java source AST parsing |
+| Android SDK + ADB | any | Phase 2 sandbox execution (optional) |
 
 ```bash
 pip install -r requirements.txt
@@ -101,11 +101,11 @@ pip install -r requirements.txt
 
 ---
 
-## 快速开始
+## Quick Start
 
-**第一步：配置 API**
+**Step 1: Configure API**
 
-编辑 `llm/config.py`：
+Edit `llm/config.py`:
 
 ```python
 API_KEY      = "your-api-key-here"
@@ -113,21 +113,21 @@ API_BASE_URL = "https://api.example.com/v1"
 MODEL        = "qwen3.5-plus"
 ```
 
-**第二步：运行分析**
+**Step 2: Run analysis**
 
 ```bash
 cd E:/UI_Skill/agent
 
 python main.py path/to/MyAndroidApp/app/src/main
 
-# 覆盖模型或 Key
+# Override model or key
 python main.py path/to/src --model gpt-4o --max-entries 5
 python main.py path/to/src --api-key sk-...
 ```
 
-> API Key 优先级：`--api-key` > 环境变量 `OPENAI_API_KEY` > `llm/config.py`
+> API Key priority: `--api-key` > env var `OPENAI_API_KEY` > `llm/config.py`
 
-**输出示例**
+**Sample output**
 
 ```json
 {
@@ -149,7 +149,7 @@ python main.py path/to/src --api-key sk-...
 }
 ```
 
-终端同时输出 token 消耗统计：
+Terminal also prints token usage:
 
 ```
 ============================================================
@@ -162,66 +162,66 @@ python main.py path/to/src --api-key sk-...
 
 ---
 
-## ReAct 循环决策体系
+## ReAct Decision System
 
-每个调用节点做出三选一决策：
+Each call node makes one of three decisions:
 
-| 决策 | 含义 | 触发条件 |
-|------|------|---------|
-| `CONCLUDE` | 输出结论（verdict: `BLOCKED` / `CLEAN` / `ALL_CLEAR`） | 已有足够证据判断是否阻塞 |
-| `TOOL_CALL` | 继续展开，逐层按需深入 | 方法内部未知，需进一步分析 |
-| `MOCK` | 跳过 | 方法不在 index 或明确无关 |
-
----
-
-## 工作记忆机制
-
-`AgentMemory` 生命周期与单个 UI 入口分析一致，上下文分两层：
-
-**结构化摘要（置顶）**：入口方法、当前焦点路径（从根到当前节点）、已 MOCK 方法、已发现阻塞点；路径上各节点附完整 body，旁路已探索节点只显示签名和结论，alias 节点标注复用来源，未展开节点列为待探索。
-
-**滑动窗口（最近 15 条）**：完整的 thought/action/observation 历史。
-
-树状上下文确保 LLM 始终能看到当前路径的完整信息，同时不被无关分支的 body 干扰。
+| Decision | Meaning | Trigger |
+|----------|---------|---------|
+| `CONCLUDE` | Output conclusion (verdict: `BLOCKED` / `CLEAN` / `ALL_CLEAR`) | Sufficient evidence to judge blocking status |
+| `TOOL_CALL` | Expand further, layer by layer | Method internals unknown, further analysis needed |
+| `MOCK` | Skip | Method not in index or clearly irrelevant |
 
 ---
 
-## 护栏机制
+## Working Memory
 
-| 护栏 | 作用 |
-|------|------|
-| P2 | 硬拦截 ReAct 循环内的 SootStaticAnalyzer 重复调用 |
-| P4 | 拦截对已展开过 body 的方法重复发起 CallChainExpander |
-| P5 | BLOCKED 结案前要求至少成功分析过 1 个项目内方法 |
+`AgentMemory` lifetime is scoped to a single UI entry analysis. Context is two-layered:
+
+**Structured summary (pinned at top)**: entry method, current focus path (root to current node), mocked methods, blocking points found; path nodes include full body, off-path explored nodes show only signature and verdict, alias nodes reference their original, unexplored nodes are listed as expandable.
+
+**Sliding window (last 15 entries)**: complete thought/action/observation history.
+
+The tree-based context ensures the LLM always sees complete information for the current path without being distracted by unrelated branch bodies.
 
 ---
 
-## 沙箱环境
+## Guardrails
 
-`test-project/` 是一个独立的 Android 工程，专门用于 Phase 2 动态验证：
+| Guardrail | Purpose |
+|-----------|---------|
+| P2 | Hard-block re-invocation of SootStaticAnalyzer inside the ReAct loop |
+| P4 | Block repeated CallChainExpander calls on already-expanded methods |
+| P5 | Require at least one successfully analyzed project method before allowing a BLOCKED conclusion |
+
+---
+
+## Sandbox Environment
+
+`test-project/` is a standalone Android project dedicated to Phase 2 dynamic verification:
 
 ```
 test-project/
 ├── app/src/androidTest/java/com/droidunblocker/test/
-│   └── UIBlockingTest.kt    ← SandboxExecutor 写入生成的测试代码
+│   └── UIBlockingTest.kt    ← SandboxExecutor writes generated test code here
 ├── build.gradle.kts
 └── gradlew.bat
 ```
 
-`SandboxExecutor` 的执行流程：
-1. 将 `TestCaseGenerator` 生成的 Kotlin 测试代码写入 `UIBlockingTest.kt`
-2. 执行 `gradlew assembleDebugAndroidTest` 编译；若失败，调用 `compile_fixer.py` LLM 修复，最多重试 3 次
-3. 编译通过后执行 `gradlew connectedAndroidTest` 在连接设备/模拟器上运行
-4. 解析 logcat 提取 `elapsed=Xms` 和 StrictMode 违规记录
-5. 修复成功的测试代码同步覆盖写入 `testcase/<target_method>.kt`
+`SandboxExecutor` execution flow:
+1. Write the Kotlin test code generated by `TestCaseGenerator` into `UIBlockingTest.kt`
+2. Run `gradlew assembleDebugAndroidTest` to compile; on failure, call `compile_fixer.py` for LLM repair, up to 3 retries
+3. On successful compile, run `gradlew connectedAndroidTest` on a connected device/emulator
+4. Parse logcat to extract `elapsed=Xms` and StrictMode violation records
+5. Successfully repaired test code is also written to `testcase/<target_method>.kt`
 
-测试项目与被测项目完全隔离，测试代码通过 `DependencyInliner` 将被测方法体内联到测试中，不依赖被测项目的编译产物。
+The test project is fully isolated from the target project. Test code inlines the target method body via `DependencyInliner`, with no dependency on the target project's build artifacts.
 
 ---
 
-## 模块文档
+## Module Docs
 
-- [`core/README.md`](core/README.md) — ReAct 引擎核心
-- [`tools/README.md`](tools/README.md) — 5 个 Tool Skill
-- [`llm/README.md`](llm/README.md) — LLM 客户端
-- [`output/README.md`](output/README.md) — 报告生成
+- [`core/README.md`](core/README.md) — ReAct engine core
+- [`tools/README.md`](tools/README.md) — 5 Tool Skills
+- [`llm/README.md`](llm/README.md) — LLM client
+- [`output/README.md`](output/README.md) — report generation
